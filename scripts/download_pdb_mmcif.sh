@@ -45,21 +45,35 @@ echo "  * rsync.ebi.ac.uk::pub/databases/pdb/data/structures/divided/mmCIF/ (Eur
 echo "  * ftp.pdbj.org::ftp_data/structures/divided/mmCIF/ (Asia)"
 echo "or see https://www.wwpdb.org/ftp/pdb-ftp-sites for more download options."
 mkdir --parents "${RAW_DIR}"
-rsync --recursive --links --perms --times --compress --info=progress2 --delete --port=33444 \
-  rsync.rcsb.org::ftp_data/structures/divided/mmCIF/ \
-  "${RAW_DIR}"
 
-echo "Unzipping all mmCIF files..."
-find "${RAW_DIR}/" -type f -iname "*.gz" -exec gunzip {} +
+date_modified=$(curl -I "https://files.wwpdb.org/pub/pdb/data/status/obsolete.dat" | grep -i last-modified | cut -d " " -f3-5)
+date_file=$(date -r "$ROOT_DIR" "+%d %b %Y" | cut -d " " -f1-4)
+echo "DATE_MODIFIED: $date_modified"
+echo "DATE_FILE: $date_file"
 
-echo "Flattening all mmCIF files..."
-mkdir --parents "${MMCIF_DIR}"
-find "${RAW_DIR}" -type d -empty -delete  # Delete empty directories.
-for subdir in "${RAW_DIR}"/*; do
-  mv "${subdir}/"*.cif "${MMCIF_DIR}"
-done
+if [ "$date_modified" == "$date_file" ]; then
+  echo "O database local já está atualizado"
+  exit 1
+else
 
-# Delete empty download directory structure.
-find "${RAW_DIR}" -type d -empty -delete
+  rsync --recursive --links --perms --times --compress --info=progress2 --delete --port=33444 \
+    rsync.rcsb.org::ftp_data/structures/divided/mmCIF/ \
+    "${RAW_DIR}"
 
-aria2c "https://files.wwpdb.org/pub/pdb/data/status/obsolete.dat" --dir="${ROOT_DIR}"
+  echo "Unzipping all mmCIF files..."
+  find "${RAW_DIR}/" -type f -iname "*.gz" -exec gunzip {} +
+
+  echo "Flattening all mmCIF files..."
+  mkdir --parents "${MMCIF_DIR}"
+  find "${RAW_DIR}" -type d -empty -delete  # Delete empty directories.
+  for subdir in "${RAW_DIR}"/*; do
+    mv "${subdir}/"*.cif "${MMCIF_DIR}"
+  done
+
+  # Delete empty download directory structure.
+  find "${RAW_DIR}" -type d -empty -delete
+
+  aria2c "https://files.wwpdb.org/pub/pdb/data/status/obsolete.dat" --dir="${ROOT_DIR}"
+  BASENAME=$(basename "https://files.wwpdb.org/pub/pdb/data/status/obsolete.dat")
+  touch -d "$date_modified" "${ROOT_DIR}/${BASENAME}"
+fi

@@ -17,6 +17,9 @@
 # Downloads and unzips the PDB70 database for AlphaFold.
 #
 # Usage: bash download_pdb70.sh /path/to/download/directory
+
+#OBS. Não fornece last-modified no cabeçalho HTTP
+
 set -e
 
 if [[ $# -eq 0 ]]; then

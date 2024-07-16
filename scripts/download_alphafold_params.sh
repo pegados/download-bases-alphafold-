@@ -35,7 +35,28 @@ SOURCE_URL="https://storage.googleapis.com/alphafold/alphafold_params_2022-12-06
 BASENAME=$(basename "${SOURCE_URL}")
 
 mkdir --parents "${ROOT_DIR}"
-aria2c "${SOURCE_URL}" --dir="${ROOT_DIR}"
-tar --extract --verbose --file="${ROOT_DIR}/${BASENAME}" \
+
+date_modified=$(curl -I $SOURCE_URL | grep -i last-modified | cut -d " " -f3-5)
+date_file=$(date -r "$ROOT_DIR/$BASENAME" "+%d %b %Y" | cut -d " " -f1-4)
+echo "DATE_MODIFIED: $date_modified"
+echo "DATE_FILE: $date_file"
+
+if [ "$date_modified" == "$date_file" ]; then
+  echo "O database local já está atualizado"
+  exit 1
+else
+  set +e #continua mesmo com erro no aria2c
+  aria2c --allow-overwrite "${SOURCE_URL}" --dir="${ROOT_DIR}" 2> /dev/null
+
+  if [[ $? -ne 0 ]]; then
+  set -e
+    echo "Erro do download com o aria2, tentando com wget"
+    params_filename="alphafold_params_2022-12-06.tar"
+    wget -c -P "${ROOT_DIR}" "https://storage.googleapis.com/alphafold/${BASENAME}"
+  fi
+
+  tar --extract --verbose --file="${ROOT_DIR}/${BASENAME}" \
   --directory="${ROOT_DIR}" --preserve-permissions
-rm "${ROOT_DIR}/${BASENAME}"
+  rm "${ROOT_DIR}/${BASENAME}"
+  touch -d "$date_modified" "${ROOT_DIR}/params_model_5.npz" #pega date do último arquivo a ser baixado
+fi

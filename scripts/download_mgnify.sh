@@ -37,7 +37,27 @@ SOURCE_URL="https://storage.googleapis.com/alphafold-databases/v2.3/mgy_clusters
 BASENAME=$(basename "${SOURCE_URL}")
 
 mkdir --parents "${ROOT_DIR}"
-aria2c "${SOURCE_URL}" --dir="${ROOT_DIR}"
-pushd "${ROOT_DIR}"
-gunzip "${ROOT_DIR}/${BASENAME}"
-popd
+
+date_modified=$(curl -I $SOURCE_URL | grep -i last-modified | cut -d " " -f3-5)
+date_file=$(date -r "$ROOT_DIR/$BASENAME" "+%d %b %Y" | cut -d " " -f1-4)
+echo "DATE_MODIFIED: $date_modified"
+echo "DATE_FILE: $date_file"
+
+if [ "$date_modified" == "$date_file" ]; then
+  echo "O database local já está atualizado"
+  exit 1
+else
+    set +e #continua mesmo com erro no aria2c
+    aria2c --allow-overwrite "${SOURCE_URL}" --dir="${ROOT_DIR}" 2> /dev/null
+
+    if [[ $? -ne 0 ]]; then
+    set -e
+    echo "Erro do download com o aria2, tentando com wget"
+    wget -c -P "${ROOT_DIR}" "https://storage.googleapis.com/alphafold-databases/v2.3/${BASENAME}"
+    fi
+
+    pushd "${ROOT_DIR}"
+    gunzip "${ROOT_DIR}/${BASENAME}"
+    touch -d "$date_modified" "${ROOT_DIR}/mgy_clusters_2022_05.fa"
+    popd
+fi

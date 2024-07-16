@@ -35,7 +35,28 @@ SOURCE_URL="https://ftp.ebi.ac.uk/pub/databases/uniprot/uniref/uniref90/uniref90
 BASENAME=$(basename "${SOURCE_URL}")
 
 mkdir --parents "${ROOT_DIR}"
-aria2c "${SOURCE_URL}" --dir="${ROOT_DIR}"
-pushd "${ROOT_DIR}"
-gunzip "${ROOT_DIR}/${BASENAME}"
-popd
+
+date_modified=$(curl -I $SOURCE_URL | grep -i last-modified | cut -d " " -f3-5)
+date_file=$(date -r "${ROOT_DIR}/${BASENAME}" "+%d %b %Y" | cut -d " " -f1-4)
+echo "DATE_MODIFIED: $date_modified"
+echo "DATE_FILE: $date_file"
+
+if [ "$date_modified" == "$date_file" ]; then
+  echo "O database local já está atualizado"
+  exit 1
+
+else
+    set +e #continua mesmo com erro no aria2c
+    aria2c --allow-overwrite "${SOURCE_URL}-" --dir="${ROOT_DIR}"
+    
+    if [[ $? -ne 0 ]]; then
+    set -e
+        echo "Erro do download com o aria2, tentando com wget"
+        wget -c -P "${ROOT_DIR}" "${SOURCE_URL}-"
+    fi
+    
+    pushd "${ROOT_DIR}"
+    gunzip "${ROOT_DIR}/${BASENAME}"
+    popd
+    touch -d "$date_modified" "${ROOT_DIR}/uniref90.fasta"
+fi

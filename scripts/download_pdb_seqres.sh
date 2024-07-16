@@ -35,8 +35,29 @@ SOURCE_URL="https://files.wwpdb.org/pub/pdb/derived_data/pdb_seqres.txt"
 BASENAME=$(basename "${SOURCE_URL}")
 
 mkdir --parents "${ROOT_DIR}"
-aria2c "${SOURCE_URL}" --dir="${ROOT_DIR}"
+date_modified=$(curl -I $SOURCE_URL | grep -i last-modified | cut -d " " -f3-5)
+date_file=$(date -r "$ROOT_DIR/pdb_seqres.txt" "+%d %b %Y" | cut -d " " -f1-4)
+echo "DATE_MODIFIED: $date_modified"
+echo "DATE_FILE: $date_file"
 
-# Keep only protein sequences.
-grep --after-context=1 --no-group-separator '>.* mol:protein' "${ROOT_DIR}/pdb_seqres.txt" > "${ROOT_DIR}/pdb_seqres_filtered.txt"
-mv "${ROOT_DIR}/pdb_seqres_filtered.txt" "${ROOT_DIR}/pdb_seqres.txt"
+
+if [ "$date_modified" == "$date_file" ]; then
+  echo "O database local já está atualizado"
+  exit 1
+
+else
+  set +e #continua mesmo com erro no aria2c
+  aria2c  --allow-overwrite "${SOURCE_URL}" --dir="${ROOT_DIR}" 2> /dev/null
+
+  if [[ $? -ne 0 ]]; then
+  set -e
+    echo "Erro do download com o aria2, tentando com wget"
+    wget -N -P "${ROOT_DIR}" "ftp://ftp.w-wpdb.org/pub/pdb/derived_data/pdb_seqres.txt"
+  fi
+
+  # Keep only protein sequences.
+  grep --after-context=1 --no-group-separator '>.* mol:protein' "${ROOT_DIR}/pdb_seqres.txt" > "${ROOT_DIR}/pdb_seqres_filtered.txt"
+  mv "${ROOT_DIR}/pdb_seqres_filtered.txt" "${ROOT_DIR}/pdb_seqres.txt"
+  # Transforma a data de criação do arquivo no formato da date_modified
+  touch -d "$date_modified" "${ROOT_DIR}/pdb_seqres.txt"
+fi
